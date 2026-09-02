@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "EventParkingReservationSystem.Api": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:55872;http://localhost:55873"
+    }
+  }
+}
