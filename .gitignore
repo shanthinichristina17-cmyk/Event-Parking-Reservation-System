@@ -1,19 +1,17 @@
-# Angular / Node
-node_modules/
-dist/
-.angular/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
 # .NET
-bin/
-obj/
-
-# Visual Studio
+**/bin/
+**/obj/
 .vs/
 *.user
 *.suo
+
+# Angular / Node
+**/node_modules/
+**/dist/
+**/.angular/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # VS Code
 .vscode/
@@ -25,6 +23,17 @@ obj/
 Thumbs.db
 .DS_Store
 
-# Environment / local secrets
+# Local secrets
 .env
 .env.local
+appsettings.Local.json
+
+# Local databases
+*.db
+*.sqlite
+*.mdf
+*.ldf
+
+# Test output
+TestResults/
+coverage/
