@@ -1,0 +1,38 @@
+# .NET
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Angular / Node
+**/node_modules/
+**/dist/
+**/.angular/
+npm-debug.log*
+yarn-debug.log*
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local secrets
+.env
+.env.local
+appsettings.Local.json
+
+# Local databases
+*.db
+*.sqlite
+*.mdf
+*.ldf
+
+# Test output
+TestResults/
+coverage/
