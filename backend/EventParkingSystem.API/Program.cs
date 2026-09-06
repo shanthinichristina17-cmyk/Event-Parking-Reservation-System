@@ -19,14 +19,19 @@ builder.Services.Configure<AuthSettings>(builder.Configuration.GetSection("Auth"
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Repositories
+// Existing Shanthi repositories
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<IVenueRepository, VenueRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
-// Services
+// Kobi reservation repositories
+builder.Services.AddScoped<ISeatRepository, SeatRepository>();
+builder.Services.AddScoped<IParkingRepository, ParkingRepository>();
+builder.Services.AddScoped<IBookingRepository, BookingRepository>();
+
+// Existing Shanthi services
 builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddSingleton<IEmailService, EmailService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -35,6 +40,14 @@ builder.Services.AddScoped<IVenueService, VenueService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+
+// Kobi reservation services
+builder.Services.AddScoped<ISeatService, SeatService>();
+builder.Services.AddScoped<IParkingService, ParkingService>();
+builder.Services.AddScoped<IBookingService, BookingService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<ITicketService, TicketService>();
+builder.Services.AddHostedService<BookingExpiryService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -54,17 +67,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwt.Issuer,
             ValidAudience = jwt.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Secret)),
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwt.Secret)),
             ClockSkew = TimeSpan.FromSeconds(30)
         };
     });
+
 builder.Services.AddAuthorization();
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-                     ?? new[] { "http://localhost:4200" };
+var allowedOrigins =
+    builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:4200" };
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("Angular", policy => policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod());
+    options.AddPolicy("Angular", policy =>
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod());
 });
 
 builder.Services.AddSwaggerGen(options =>
@@ -73,8 +93,9 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Event & Parking Reservation System API",
         Version = "v1",
-        Description = "ASP.NET Core 8 backend for the Event & Parking Reservation System."
+        Description = "ASP.NET Core 8 backend for Event & Parking Reservation System."
     });
+
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Type = SecuritySchemeType.Http,
@@ -84,11 +105,16 @@ builder.Services.AddSwaggerGen(options =>
         In = ParameterLocation.Header,
         Description = "Paste the JWT token returned by /api/auth/login."
     });
+
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         [new OpenApiSecurityScheme
         {
-            Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            Reference = new OpenApiReference
+            {
+                Type = ReferenceType.SecurityScheme,
+                Id = "Bearer"
+            }
         }] = Array.Empty<string>()
     });
 });
@@ -103,27 +129,35 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Create the LocalDB database/schema before hosted reservation jobs start.
-// Failure is logged but does not stop Swagger from opening.
-await DatabaseBootstrapper.InitializeAsync(app.Services, app.Configuration, app.Environment);
-
-// Company development PCs cannot trust the ASP.NET HTTPS certificate.
-// Local development therefore runs on HTTP only. Production can terminate HTTPS
-// at the hosting layer/reverse proxy.
+await DatabaseBootstrapper.InitializeAsync(
+    app.Services,
+    app.Configuration,
+    app.Environment);
 
 app.UseCors("Angular");
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
-app.MapGet("/health", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow })).AllowAnonymous();
 
-app.MapGet("/health/db", async (AppDbContext db, IWebHostEnvironment env) =>
+app.MapControllers();
+
+app.MapGet("/health", () =>
+    Results.Ok(new { status = "ok", utc = DateTime.UtcNow }))
+    .AllowAnonymous();
+
+app.MapGet("/health/db",
+    async (AppDbContext db, IWebHostEnvironment env) =>
 {
     try
     {
         var canConnect = await db.Database.CanConnectAsync();
+
         return canConnect
-            ? Results.Ok(new { status = "ok", database = "connected", utc = DateTime.UtcNow })
+            ? Results.Ok(new
+            {
+                status = "ok",
+                database = "connected",
+                utc = DateTime.UtcNow
+            })
             : Results.Json(new
             {
                 status = "error",
@@ -138,13 +172,15 @@ app.MapGet("/health/db", async (AppDbContext db, IWebHostEnvironment env) =>
             status = "error",
             database = "disconnected",
             message = "Database connection failed.",
-            details = env.IsDevelopment() ? ex.GetBaseException().Message : null
+            details = env.IsDevelopment()
+                ? ex.GetBaseException().Message
+                : null
         }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 }).AllowAnonymous();
 
-// Development diagnostic: proves JWT generation works before testing /api/auth/login.
-app.MapGet("/health/jwt", (IJwtService jwtService, IWebHostEnvironment env) =>
+app.MapGet("/health/jwt",
+    (IJwtService jwtService, IWebHostEnvironment env) =>
 {
     if (!env.IsDevelopment())
         return Results.NotFound();
@@ -160,7 +196,13 @@ app.MapGet("/health/jwt", (IJwtService jwtService, IWebHostEnvironment env) =>
     };
 
     var token = jwtService.GenerateToken(sample);
-    return Results.Ok(new { status = "ok", jwt = "generated", tokenLength = token.Length });
+
+    return Results.Ok(new
+    {
+        status = "ok",
+        jwt = "generated",
+        tokenLength = token.Length
+    });
 }).AllowAnonymous();
 
 app.Run();

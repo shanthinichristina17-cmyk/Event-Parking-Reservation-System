@@ -17,6 +17,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<BookingSeat> BookingSeats => Set<BookingSeat>();
     public DbSet<ParkingReservation> ParkingReservations => Set<ParkingReservation>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<Refund> Refunds => Set<Refund>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -79,6 +80,7 @@ public sealed class AppDbContext : DbContext
             e.HasKey(x => x.SlotId);
             e.Property(x => x.Zone).HasMaxLength(30);
             e.Property(x => x.SlotNumber).HasMaxLength(30).IsRequired();
+            e.Property(x => x.ParkingType).HasMaxLength(50);
             e.Property(x => x.Status).HasMaxLength(20).IsRequired();
             e.Property(x => x.Fee).HasColumnType("decimal(10,2)");
             e.Property(x => x.RowVersion).IsRowVersion();
@@ -93,6 +95,10 @@ public sealed class AppDbContext : DbContext
             e.HasIndex(x => x.BookingNumber).IsUnique();
             e.Property(x => x.BookingNumber).HasMaxLength(40).IsRequired();
             e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.TicketSubtotal).HasColumnType("decimal(10,2)");
+            e.Property(x => x.ParkingFee).HasColumnType("decimal(10,2)");
+            e.Property(x => x.PromoCode).HasMaxLength(50);
+            e.Property(x => x.DiscountAmount).HasColumnType("decimal(10,2)");
             e.Property(x => x.TotalAmount).HasColumnType("decimal(10,2)");
             e.Property(x => x.RowVersion).IsRowVersion();
             e.HasIndex(x => x.CustomerId);
@@ -126,11 +132,24 @@ public sealed class AppDbContext : DbContext
         {
             e.HasKey(x => x.PaymentId);
             e.Property(x => x.Amount).HasColumnType("decimal(10,2)");
+            e.Property(x => x.PaymentMethod).HasMaxLength(50).IsRequired();
             e.Property(x => x.Status).HasMaxLength(20).IsRequired();
-            e.Property(x => x.ReceiptNumber).HasMaxLength(50).IsRequired();
+            e.Property(x => x.ReceiptNumber).HasMaxLength(60).IsRequired();
+            e.Property(x => x.FailureReason).HasMaxLength(300);
             e.HasIndex(x => x.BookingId).IsUnique();
             e.HasIndex(x => x.ReceiptNumber).IsUnique();
             e.HasOne(x => x.Booking).WithOne(x => x.Payment).HasForeignKey<Payment>(x => x.BookingId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Refund>(e =>
+        {
+            e.HasKey(x => x.RefundId);
+            e.Property(x => x.Amount).HasColumnType("decimal(10,2)");
+            e.Property(x => x.Status).HasMaxLength(30).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(300).IsRequired();
+            e.HasIndex(x => x.BookingId).IsUnique();
+            e.HasOne(x => x.Booking).WithOne(x => x.Refund).HasForeignKey<Refund>(x => x.BookingId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Payment).WithMany().HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<Notification>(e =>

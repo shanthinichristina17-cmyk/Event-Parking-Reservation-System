@@ -82,8 +82,10 @@ public class ParkingSlot
     public int EventId { get; set; }
     public string? Zone { get; set; }
     public string SlotNumber { get; set; } = string.Empty;
+    public string? ParkingType { get; set; }
     public decimal Fee { get; set; }
     public string Status { get; set; } = "Available";
+    public bool IsDisabled { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     public Event? Event { get; set; }
@@ -97,7 +99,13 @@ public class Booking
     public int EventId { get; set; }
     public string Status { get; set; } = "Pending";
     public DateTime? HoldExpiresAt { get; set; }
+
+    public decimal TicketSubtotal { get; set; }
+    public decimal ParkingFee { get; set; }
+    public string? PromoCode { get; set; }
+    public decimal DiscountAmount { get; set; }
     public decimal TotalAmount { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
@@ -107,6 +115,7 @@ public class Booking
     public ICollection<BookingSeat> BookingSeats { get; set; } = new List<BookingSeat>();
     public ParkingReservation? ParkingReservation { get; set; }
     public Payment? Payment { get; set; }
+    public Refund? Refund { get; set; }
 }
 
 public class BookingSeat
@@ -136,10 +145,25 @@ public class Payment
     public int PaymentId { get; set; }
     public int BookingId { get; set; }
     public decimal Amount { get; set; }
-    public string Status { get; set; } = "Completed";
+    public string PaymentMethod { get; set; } = "Card";
+    public string Status { get; set; } = "Pending";
     public DateTime PaidAt { get; set; } = DateTime.UtcNow;
     public string ReceiptNumber { get; set; } = string.Empty;
+    public string? FailureReason { get; set; }
     public Booking? Booking { get; set; }
+}
+
+public class Refund
+{
+    public int RefundId { get; set; }
+    public int BookingId { get; set; }
+    public int? PaymentId { get; set; }
+    public decimal Amount { get; set; }
+    public string Status { get; set; } = "Simulated";
+    public string Reason { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public Booking? Booking { get; set; }
+    public Payment? Payment { get; set; }
 }
 
 public class Notification

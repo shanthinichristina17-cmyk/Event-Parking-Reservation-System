@@ -3,10 +3,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EventParkingSystem.API.Data;
 
 /// <summary>
-/// Development bootstrapper. Creates the LocalDB database/schema automatically
-/// when it does not exist, then applies predictable demo seed data.
-/// This keeps Swagger usable on locked-down company PCs without requiring
-/// developers to run SQL scripts before the first launch.
+/// Development bootstrapper. Creates LocalDB on first run and applies small,
+/// idempotent reservation schema upgrades for existing developer databases.
 /// </summary>
 public static class DatabaseBootstrapper
 {
@@ -30,17 +28,19 @@ public static class DatabaseBootstrapper
         try
         {
             var created = await db.Database.EnsureCreatedAsync();
+
+            if (!created)
+                await ReservationSchemaUpgrader.ApplyAsync(db);
+
             logger.LogInformation(created
                 ? "Database and schema created automatically."
-                : "Database already exists; schema bootstrap not required.");
+                : "Database ready and reservation schema upgrade checked.");
 
             if (environment.IsDevelopment())
                 await DbSeeder.SeedDevelopmentAsync(db, configuration, logger);
         }
         catch (Exception ex)
         {
-            // Do not prevent Swagger from starting. Database-backed endpoints and
-            // /health/db will report the database problem clearly.
             logger.LogError(ex,
                 "Database bootstrap failed. Swagger will still start. Check LocalDB and the DefaultConnection setting.");
         }
