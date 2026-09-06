@@ -7,10 +7,10 @@ namespace EventParkingSystem.API.Repositories;
 public interface IParkingRepository
 {
     Task<Event?> GetEventAsync(int eventId);
-    Task<List<ParkingSlot>> GetForEventAsync(int eventId);
-    Task<bool> AnyForEventAsync(int eventId);
+    Task<List<ParkingSlot>> GetForEventAsync(int eventId, bool tracking = false);
     Task<ParkingSlot?> GetByIdAsync(int slotId);
     Task AddRangeAsync(IEnumerable<ParkingSlot> slots);
+    Task AddAsync(ParkingSlot slot);
     void Remove(ParkingSlot slot);
     Task<int> SaveChangesAsync();
 }
@@ -23,21 +23,20 @@ public sealed class ParkingRepository : IParkingRepository
     public Task<Event?> GetEventAsync(int eventId) =>
         _db.Events.FirstOrDefaultAsync(x => x.EventId == eventId);
 
-    public Task<List<ParkingSlot>> GetForEventAsync(int eventId) =>
-        _db.ParkingSlots.AsNoTracking()
-            .Where(x => x.EventId == eventId)
-            .OrderBy(x => x.Zone)
-            .ThenBy(x => x.SlotNumber)
-            .ToListAsync();
-
-    public Task<bool> AnyForEventAsync(int eventId) =>
-        _db.ParkingSlots.AnyAsync(x => x.EventId == eventId);
+    public Task<List<ParkingSlot>> GetForEventAsync(int eventId, bool tracking = false)
+    {
+        var query = _db.ParkingSlots.Where(x => x.EventId == eventId).AsQueryable();
+        if (!tracking) query = query.AsNoTracking();
+        return query.OrderBy(x => x.Zone).ThenBy(x => x.SlotNumber).ToListAsync();
+    }
 
     public Task<ParkingSlot?> GetByIdAsync(int slotId) =>
         _db.ParkingSlots.FirstOrDefaultAsync(x => x.SlotId == slotId);
 
     public async Task AddRangeAsync(IEnumerable<ParkingSlot> slots) =>
         await _db.ParkingSlots.AddRangeAsync(slots);
+
+    public async Task AddAsync(ParkingSlot slot) => await _db.ParkingSlots.AddAsync(slot);
 
     public void Remove(ParkingSlot slot) => _db.ParkingSlots.Remove(slot);
 

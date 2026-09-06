@@ -25,6 +25,21 @@ public sealed class ParkingController : ControllerBase
         [FromBody] GenerateParkingLayoutRequest request) =>
         Ok(await _service.GenerateAsync(eventId, request));
 
+    [HttpPost]
+    [Authorize(Roles = Roles.Admin)]
+    public async Task<ActionResult<ParkingSlotDto>> Create(
+        int eventId,
+        [FromBody] CreateParkingSlotRequest request) =>
+        Ok(await _service.CreateAsync(eventId, request));
+
+    [HttpPut("{slotId:int}")]
+    [Authorize(Roles = Roles.Admin)]
+    public async Task<ActionResult<ParkingSlotDto>> Update(
+        int eventId,
+        int slotId,
+        [FromBody] UpdateParkingSlotRequest request) =>
+        Ok(await _service.UpdateAsync(eventId, slotId, request));
+
     [HttpDelete("{slotId:int}")]
     [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Delete(int eventId, int slotId)

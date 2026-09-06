@@ -25,6 +25,14 @@ public sealed class SeatsController : ControllerBase
         [FromBody] GenerateSeatMapRequest request) =>
         Ok(await _service.GenerateAsync(eventId, request));
 
+    [HttpPut("{seatId:int}")]
+    [Authorize(Roles = Roles.Admin)]
+    public async Task<ActionResult<SeatDto>> Update(
+        int eventId,
+        int seatId,
+        [FromBody] UpdateSeatRequest request) =>
+        Ok(await _service.UpdateAsync(eventId, seatId, request));
+
     [HttpDelete("{seatId:int}")]
     [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Delete(int eventId, int seatId)

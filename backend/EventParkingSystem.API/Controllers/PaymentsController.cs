@@ -7,23 +7,26 @@ using Microsoft.AspNetCore.Mvc;
 namespace EventParkingSystem.API.Controllers;
 
 [ApiController]
-[Route("api/payments")]
+[Route("api/bookings/{bookingId:int}/payment")]
 [Authorize]
 public sealed class PaymentsController : ControllerBase
 {
     private readonly IPaymentService _service;
     public PaymentsController(IPaymentService service) => _service = service;
 
-    [HttpPost]
-    public async Task<ActionResult<PaymentResponse>> Pay([FromBody] CreatePaymentRequest request) =>
-        Ok(await _service.PayAsync(
+    [HttpPost("simulate")]
+    public async Task<ActionResult<PaymentResponse>> Simulate(
+        int bookingId,
+        [FromBody] SimulatePaymentRequest request) =>
+        Ok(await _service.SimulateAsync(
+            bookingId,
             User.CustomerId(),
             User.IsInRole(Roles.Admin),
             request));
 
-    [HttpGet("booking/{bookingId:int}")]
-    public async Task<ActionResult<PaymentResponse>> GetForBooking(int bookingId) =>
-        Ok(await _service.GetForBookingAsync(
+    [HttpGet]
+    public async Task<ActionResult<PaymentResponse>> Get(int bookingId) =>
+        Ok(await _service.GetAsync(
             bookingId,
             User.CustomerId(),
             User.IsInRole(Roles.Admin)));

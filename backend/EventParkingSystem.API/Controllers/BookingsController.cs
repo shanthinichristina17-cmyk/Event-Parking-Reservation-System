@@ -20,32 +20,74 @@ public sealed class BookingsController : ControllerBase
         _tickets = tickets;
     }
 
-    [HttpPost]
+    [HttpPost("hold")]
     [Authorize(Roles = Roles.Customer)]
-    public async Task<ActionResult<BookingResponse>> Create([FromBody] CreateBookingRequest request) =>
-        Ok(await _bookings.CreateAsync(User.CustomerId(), request));
+    public async Task<ActionResult<BookingSummaryResponse>> Hold(
+        [FromBody] HoldSeatsRequest request) =>
+        Ok(await _bookings.HoldSeatsAsync(User.CustomerId(), request));
+
+    [HttpPut("{bookingId:int}/parking")]
+    [Authorize(Roles = Roles.Customer)]
+    public async Task<ActionResult<BookingSummaryResponse>> Parking(
+        int bookingId,
+        [FromBody] SelectParkingRequest request) =>
+        Ok(await _bookings.SelectParkingAsync(
+            bookingId,
+            User.CustomerId(),
+            request));
+
+    [HttpPost("{bookingId:int}/promo")]
+    [Authorize(Roles = Roles.Customer)]
+    public async Task<ActionResult<BookingSummaryResponse>> Promo(
+        int bookingId,
+        [FromBody] ApplyPromoRequest request) =>
+        Ok(await _bookings.ApplyPromoAsync(
+            bookingId,
+            User.CustomerId(),
+            request));
 
     [HttpGet("me")]
     [Authorize(Roles = Roles.Customer)]
-    public async Task<ActionResult<List<BookingResponse>>> Mine() =>
-        Ok(await _bookings.GetMineAsync(User.CustomerId()));
+    public async Task<ActionResult<List<BookingSummaryResponse>>> Mine(
+        [FromQuery] string? tab = null) =>
+        Ok(await _bookings.GetMineAsync(User.CustomerId(), tab));
 
     [HttpGet("{bookingId:int}")]
-    public async Task<ActionResult<BookingResponse>> Get(int bookingId) =>
-        Ok(await _bookings.GetAsync(bookingId, User.CustomerId(), User.IsInRole(Roles.Admin)));
+    public async Task<ActionResult<BookingSummaryResponse>> Get(int bookingId) =>
+        Ok(await _bookings.GetAsync(
+            bookingId,
+            User.CustomerId(),
+            User.IsInRole(Roles.Admin)));
+
+    [HttpGet("{bookingId:int}/summary")]
+    public async Task<ActionResult<BookingSummaryResponse>> Summary(int bookingId) =>
+        Ok(await _bookings.GetAsync(
+            bookingId,
+            User.CustomerId(),
+            User.IsInRole(Roles.Admin)));
 
     [HttpPost("{bookingId:int}/cancel")]
-    public async Task<ActionResult<BookingResponse>> Cancel(int bookingId) =>
-        Ok(await _bookings.CancelAsync(bookingId, User.CustomerId(), User.IsInRole(Roles.Admin)));
+    public async Task<ActionResult<CancellationResponse>> Cancel(int bookingId) =>
+        Ok(await _bookings.CancelAsync(
+            bookingId,
+            User.CustomerId(),
+            User.IsInRole(Roles.Admin)));
+
+    [HttpGet("{bookingId:int}/ticket")]
+    public async Task<ActionResult<TicketResponse>> Ticket(int bookingId) =>
+        Ok(await _tickets.GetTicketAsync(
+            bookingId,
+            User.CustomerId(),
+            User.IsInRole(Roles.Admin)));
 
     [HttpGet("{bookingId:int}/ticket/qr")]
     public async Task<IActionResult> QrTicket(int bookingId)
     {
-        var png = await _tickets.GenerateQrPngAsync(
+        var bytes = await _tickets.GenerateQrPngAsync(
             bookingId,
             User.CustomerId(),
             User.IsInRole(Roles.Admin));
 
-        return File(png, "image/png", $"booking-{bookingId}-qr.png");
+        return File(bytes, "image/png", $"ticket-{bookingId}-qr.png");
     }
 }

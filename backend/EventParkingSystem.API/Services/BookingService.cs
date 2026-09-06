@@ -10,10 +10,12 @@ namespace EventParkingSystem.API.Services;
 
 public interface IBookingService
 {
-    Task<BookingResponse> CreateAsync(int customerId, CreateBookingRequest request);
-    Task<BookingResponse> GetAsync(int bookingId, int requesterId, bool isAdmin);
-    Task<List<BookingResponse>> GetMineAsync(int customerId);
-    Task<BookingResponse> CancelAsync(int bookingId, int requesterId, bool isAdmin);
+    Task<BookingSummaryResponse> HoldSeatsAsync(int customerId, HoldSeatsRequest request);
+    Task<BookingSummaryResponse> SelectParkingAsync(int bookingId, int requesterId, SelectParkingRequest request);
+    Task<BookingSummaryResponse> ApplyPromoAsync(int bookingId, int requesterId, ApplyPromoRequest request);
+    Task<BookingSummaryResponse> GetAsync(int bookingId, int requesterId, bool isAdmin);
+    Task<List<BookingSummaryResponse>> GetMineAsync(int customerId, string? tab);
+    Task<CancellationResponse> CancelAsync(int bookingId, int requesterId, bool isAdmin);
     Task<int> ExpirePendingHoldsAsync();
 }
 
@@ -33,13 +35,13 @@ public sealed class BookingService : IBookingService
         _settings = settings.Value;
     }
 
-    public async Task<BookingResponse> CreateAsync(int customerId, CreateBookingRequest request)
+    public async Task<BookingSummaryResponse> HoldSeatsAsync(int customerId, HoldSeatsRequest request)
     {
         if (request.SeatIds is null || request.SeatIds.Count == 0)
-            throw ApiException.BadRequest("At least one seat is required.");
+            throw ApiException.BadRequest("Select at least one seat.");
 
-        var distinctSeatIds = request.SeatIds.Distinct().ToList();
-        if (distinctSeatIds.Count != request.SeatIds.Count)
+        var ids = request.SeatIds.Distinct().ToList();
+        if (ids.Count != request.SeatIds.Count)
             throw ApiException.BadRequest("Duplicate seat IDs are not allowed.");
 
         await using var tx = await _bookings.BeginSerializableTransactionAsync();
@@ -55,32 +57,26 @@ public sealed class BookingService : IBookingService
             var eventEntity = await _bookings.GetEventAsync(request.EventId)
                 ?? throw ApiException.NotFound("Event not found.");
 
-            var seats = await _bookings.GetSeatsAsync(distinctSeatIds);
+            var eventStart = eventEntity.EventDate.ToDateTime(eventEntity.StartTime);
+            if (eventStart <= DateTime.Now)
+                throw ApiException.Conflict("This event has already started or finished.");
 
-            if (seats.Count != distinctSeatIds.Count)
+            var seats = await _bookings.GetSeatsAsync(ids);
+
+            if (seats.Count != ids.Count)
                 throw ApiException.BadRequest("One or more selected seats do not exist.");
 
             if (seats.Any(x => x.EventId != request.EventId))
-                throw ApiException.BadRequest("All selected seats must belong to the selected event.");
+                throw ApiException.BadRequest("All selected seats must belong to this event.");
 
-            var unavailableSeat = seats.FirstOrDefault(x => x.Status != SeatStatuses.Available);
-            if (unavailableSeat is not null)
-                throw ApiException.Conflict($"Seat {unavailableSeat.SeatRow}{unavailableSeat.SeatNumber} is not available.");
-
-            ParkingSlot? slot = null;
-            if (request.ParkingSlotId.HasValue)
-            {
-                slot = await _bookings.GetParkingSlotAsync(request.ParkingSlotId.Value)
-                    ?? throw ApiException.NotFound("Parking slot not found.");
-
-                if (slot.EventId != request.EventId)
-                    throw ApiException.BadRequest("Parking slot must belong to the selected event.");
-
-                if (slot.Status != ParkingStatuses.Available)
-                    throw ApiException.Conflict("Selected parking slot is not available.");
-            }
+            var unavailable = seats.FirstOrDefault(x => x.Status != SeatStatuses.Available);
+            if (unavailable is not null)
+                throw ApiException.Conflict(
+                    $"Seat {unavailable.SeatRow}{unavailable.SeatNumber} is no longer available.");
 
             var now = DateTime.UtcNow;
+            var subtotal = seats.Sum(x => x.Price);
+
             var booking = new Booking
             {
                 BookingNumber = GenerateBookingNumber(),
@@ -88,14 +84,18 @@ public sealed class BookingService : IBookingService
                 EventId = request.EventId,
                 Status = BookingStatuses.Pending,
                 HoldExpiresAt = now.AddMinutes(Math.Max(1, _settings.HoldMinutes)),
+                TicketSubtotal = subtotal,
+                ParkingFee = 0m,
+                DiscountAmount = 0m,
+                TotalAmount = subtotal,
                 CreatedAt = now,
-                UpdatedAt = now,
-                TotalAmount = seats.Sum(x => x.Price) + (slot?.Fee ?? 0m)
+                UpdatedAt = now
             };
 
             foreach (var seat in seats)
             {
                 seat.Status = SeatStatuses.Held;
+
                 booking.BookingSeats.Add(new BookingSeat
                 {
                     SeatId = seat.SeatId,
@@ -104,30 +104,20 @@ public sealed class BookingService : IBookingService
                 });
             }
 
-            if (slot is not null)
-            {
-                slot.Status = ParkingStatuses.Held;
-                booking.ParkingReservation = new ParkingReservation
-                {
-                    SlotId = slot.SlotId,
-                    FeeAtReservation = slot.Fee,
-                    IsActive = true
-                };
-            }
-
             await _bookings.AddAsync(booking);
             await _bookings.SaveChangesAsync();
             await tx.CommitAsync();
 
             var saved = await _bookings.GetByIdAsync(booking.BookingId)
-                ?? throw ApiException.NotFound("Booking not found after creation.");
+                ?? throw ApiException.NotFound("Booking hold not found after creation.");
 
             return ToDto(saved);
         }
         catch (DbUpdateException)
         {
             await tx.RollbackAsync();
-            throw ApiException.Conflict("One of the selected seats or the parking slot was taken by another booking.");
+            throw ApiException.Conflict(
+                "One of the selected seats was taken by another customer. Please refresh the seat map.");
         }
         catch
         {
@@ -136,19 +126,156 @@ public sealed class BookingService : IBookingService
         }
     }
 
-    public async Task<BookingResponse> GetAsync(int bookingId, int requesterId, bool isAdmin)
+    public async Task<BookingSummaryResponse> SelectParkingAsync(
+        int bookingId,
+        int requesterId,
+        SelectParkingRequest request)
     {
-        var booking = await _bookings.GetByIdAsync(bookingId)
+        await using var tx = await _bookings.BeginSerializableTransactionAsync();
+
+        try
+        {
+            var booking = await GetOwnedPendingBookingAsync(bookingId, requesterId);
+
+            if (booking.ParkingReservation is { IsActive: true, Slot: not null } oldReservation)
+            {
+                oldReservation.Slot!.Status = ParkingStatuses.Available;
+                oldReservation.IsActive = false;
+                booking.ParkingFee = 0m;
+            }
+
+            if (request.ParkingSlotId.HasValue)
+            {
+                var slot = await _bookings.GetParkingSlotAsync(request.ParkingSlotId.Value)
+                    ?? throw ApiException.NotFound("Parking slot not found.");
+
+                if (slot.EventId != booking.EventId)
+                    throw ApiException.BadRequest("Parking slot belongs to another event.");
+
+                if (slot.IsDisabled || slot.Status == ParkingStatuses.Disabled)
+                    throw ApiException.Conflict("Parking slot is disabled.");
+
+                if (slot.Status != ParkingStatuses.Available)
+                    throw ApiException.Conflict("Parking slot is no longer available.");
+
+                slot.Status = ParkingStatuses.Held;
+
+                if (booking.ParkingReservation is null)
+                {
+                    booking.ParkingReservation = new ParkingReservation
+                    {
+                        SlotId = slot.SlotId,
+                        FeeAtReservation = slot.Fee,
+                        IsActive = true
+                    };
+                }
+                else
+                {
+                    booking.ParkingReservation.SlotId = slot.SlotId;
+                    booking.ParkingReservation.Slot = slot;
+                    booking.ParkingReservation.FeeAtReservation = slot.Fee;
+                    booking.ParkingReservation.IsActive = true;
+                }
+
+                booking.ParkingFee = slot.Fee;
+            }
+
+            RecalculateTotal(booking);
+            booking.UpdatedAt = DateTime.UtcNow;
+
+            await _bookings.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            var saved = await _bookings.GetByIdAsync(bookingId)
+                ?? throw ApiException.NotFound("Booking not found.");
+
+            return ToDto(saved);
+        }
+        catch (DbUpdateException)
+        {
+            await tx.RollbackAsync();
+            throw ApiException.Conflict(
+                "Parking slot was selected by another customer. Please choose another slot.");
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<BookingSummaryResponse> ApplyPromoAsync(
+        int bookingId,
+        int requesterId,
+        ApplyPromoRequest request)
+    {
+        var booking = await GetOwnedPendingBookingAsync(bookingId, requesterId);
+
+        var code = request.PromoCode?.Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            booking.PromoCode = null;
+            booking.DiscountAmount = 0m;
+        }
+        else if (code == "EVENT10")
+        {
+            booking.PromoCode = code;
+            booking.DiscountAmount = Math.Round(booking.TicketSubtotal * 0.10m, 2);
+        }
+        else
+        {
+            throw ApiException.BadRequest("Invalid promo code.");
+        }
+
+        RecalculateTotal(booking);
+        booking.UpdatedAt = DateTime.UtcNow;
+        await _bookings.SaveChangesAsync();
+
+        return ToDto(booking);
+    }
+
+    public async Task<BookingSummaryResponse> GetAsync(
+        int bookingId,
+        int requesterId,
+        bool isAdmin)
+    {
+        var booking = await _bookings.GetByIdAsync(bookingId, tracking: false)
             ?? throw ApiException.NotFound("Booking not found.");
 
         EnsureOwnerOrAdmin(booking, requesterId, isAdmin);
         return ToDto(booking);
     }
 
-    public async Task<List<BookingResponse>> GetMineAsync(int customerId) =>
-        (await _bookings.GetForCustomerAsync(customerId)).Select(ToDto).ToList();
+    public async Task<List<BookingSummaryResponse>> GetMineAsync(int customerId, string? tab)
+    {
+        var bookings = await _bookings.GetForCustomerAsync(customerId);
+        var now = DateTime.Now;
+        var normalized = tab?.Trim().ToLowerInvariant();
 
-    public async Task<BookingResponse> CancelAsync(int bookingId, int requesterId, bool isAdmin)
+        bookings = normalized switch
+        {
+            "cancelled" => bookings.Where(x => x.Status == BookingStatuses.Cancelled).ToList(),
+            "past" => bookings.Where(x =>
+                x.Event != null &&
+                x.Event.EventDate.ToDateTime(x.Event.StartTime) < now &&
+                x.Status != BookingStatuses.Cancelled).ToList(),
+            "upcoming" => bookings.Where(x =>
+                x.Event != null &&
+                x.Event.EventDate.ToDateTime(x.Event.StartTime) >= now &&
+                x.Status != BookingStatuses.Cancelled &&
+                x.Status != BookingStatuses.Expired).ToList(),
+            null or "" => bookings,
+            _ => throw ApiException.BadRequest("tab must be upcoming, past or cancelled.")
+        };
+
+        return bookings.Select(ToDto).ToList();
+    }
+
+    public async Task<CancellationResponse> CancelAsync(
+        int bookingId,
+        int requesterId,
+        bool isAdmin)
     {
         await using var tx = await _bookings.BeginSerializableTransactionAsync();
 
@@ -160,23 +287,55 @@ public sealed class BookingService : IBookingService
             EnsureOwnerOrAdmin(booking, requesterId, isAdmin);
 
             if (booking.Status == BookingStatuses.Cancelled)
-                return ToDto(booking);
+            {
+                return new CancellationResponse(
+                    booking.BookingId,
+                    booking.BookingNumber,
+                    booking.Status,
+                    booking.Refund is not null,
+                    booking.Refund?.Amount ?? 0m,
+                    booking.Refund?.Status,
+                    "Booking is already cancelled.");
+            }
 
             if (booking.Status == BookingStatuses.Expired)
                 throw ApiException.Conflict("Expired booking cannot be cancelled.");
 
-            foreach (var bookingSeat in booking.BookingSeats.Where(x => x.IsActive))
-            {
-                bookingSeat.IsActive = false;
-                if (bookingSeat.Seat is not null)
-                    bookingSeat.Seat.Status = SeatStatuses.Available;
-            }
+            if (booking.Event is null)
+                throw ApiException.NotFound("Event not found for this booking.");
 
-            if (booking.ParkingReservation is { IsActive: true } reservation)
+            var eventStart = booking.Event.EventDate.ToDateTime(booking.Event.StartTime);
+            var cutoff = TimeSpan.FromHours(Math.Max(1, _settings.CancellationCutoffHours));
+
+            if (eventStart - DateTime.Now <= cutoff)
+                throw ApiException.Conflict(
+                    $"Cancellation is not allowed within {_settings.CancellationCutoffHours} hours of the event.");
+
+            ReleaseResources(booking);
+
+            var refundSimulated = false;
+            var refundAmount = 0m;
+            string? refundStatus = null;
+
+            if (booking.Payment?.Status == PaymentStatuses.Completed)
             {
-                reservation.IsActive = false;
-                if (reservation.Slot is not null)
-                    reservation.Slot.Status = ParkingStatuses.Available;
+                var refund = booking.Refund ?? new Refund
+                {
+                    BookingId = booking.BookingId,
+                    PaymentId = booking.Payment.PaymentId,
+                    Amount = booking.Payment.Amount,
+                    Status = RefundStatuses.Simulated,
+                    Reason = "Customer cancellation",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                if (booking.Refund is null)
+                    await _bookings.AddRefundAsync(refund);
+
+                booking.Refund = refund;
+                refundSimulated = true;
+                refundAmount = refund.Amount;
+                refundStatus = refund.Status;
             }
 
             booking.Status = BookingStatuses.Cancelled;
@@ -189,9 +348,18 @@ public sealed class BookingService : IBookingService
             await _notifications.CreateAsync(
                 booking.CustomerId,
                 NotificationTypes.Cancellation,
-                $"Booking {booking.BookingNumber} was cancelled.");
+                refundSimulated
+                    ? $"Booking {booking.BookingNumber} cancelled. Refund simulation: LKR {refundAmount:N2}."
+                    : $"Booking {booking.BookingNumber} cancelled.");
 
-            return ToDto(booking);
+            return new CancellationResponse(
+                booking.BookingId,
+                booking.BookingNumber,
+                booking.Status,
+                refundSimulated,
+                refundAmount,
+                refundStatus,
+                "Booking cancelled and reserved resources released.");
         }
         catch
         {
@@ -207,20 +375,7 @@ public sealed class BookingService : IBookingService
 
         foreach (var booking in expired)
         {
-            foreach (var bookingSeat in booking.BookingSeats.Where(x => x.IsActive))
-            {
-                bookingSeat.IsActive = false;
-                if (bookingSeat.Seat is not null)
-                    bookingSeat.Seat.Status = SeatStatuses.Available;
-            }
-
-            if (booking.ParkingReservation is { IsActive: true } reservation)
-            {
-                reservation.IsActive = false;
-                if (reservation.Slot is not null)
-                    reservation.Slot.Status = ParkingStatuses.Available;
-            }
-
+            ReleaseResources(booking);
             booking.Status = BookingStatuses.Expired;
             booking.HoldExpiresAt = null;
             booking.UpdatedAt = DateTime.UtcNow;
@@ -230,10 +385,58 @@ public sealed class BookingService : IBookingService
         return expired.Count;
     }
 
+    private async Task<Booking> GetOwnedPendingBookingAsync(int bookingId, int requesterId)
+    {
+        var booking = await _bookings.GetByIdAsync(bookingId)
+            ?? throw ApiException.NotFound("Booking not found.");
+
+        if (booking.CustomerId != requesterId)
+            throw ApiException.Forbidden("You can only update your own booking.");
+
+        if (booking.Status != BookingStatuses.Pending)
+            throw ApiException.Conflict("Only pending bookings can be changed.");
+
+        if (!booking.HoldExpiresAt.HasValue || booking.HoldExpiresAt <= DateTime.UtcNow)
+        {
+            ReleaseResources(booking);
+            booking.Status = BookingStatuses.Expired;
+            booking.HoldExpiresAt = null;
+            booking.UpdatedAt = DateTime.UtcNow;
+            await _bookings.SaveChangesAsync();
+            throw ApiException.Conflict("Seat hold expired. Please select seats again.");
+        }
+
+        return booking;
+    }
+
+    private static void RecalculateTotal(Booking booking)
+    {
+        booking.TotalAmount = Math.Max(
+            0m,
+            booking.TicketSubtotal + booking.ParkingFee - booking.DiscountAmount);
+    }
+
+    private static void ReleaseResources(Booking booking)
+    {
+        foreach (var item in booking.BookingSeats.Where(x => x.IsActive))
+        {
+            item.IsActive = false;
+            if (item.Seat is not null)
+                item.Seat.Status = SeatStatuses.Available;
+        }
+
+        if (booking.ParkingReservation is { IsActive: true } reservation)
+        {
+            reservation.IsActive = false;
+            if (reservation.Slot is not null)
+                reservation.Slot.Status = ParkingStatuses.Available;
+        }
+    }
+
     private static void EnsureOwnerOrAdmin(Booking booking, int requesterId, bool isAdmin)
     {
         if (!isAdmin && booking.CustomerId != requesterId)
-            throw ApiException.Forbidden("You can only access your own bookings.");
+            throw ApiException.Forbidden("You can only access your own booking.");
     }
 
     private static string GenerateBookingNumber()
@@ -242,15 +445,15 @@ public sealed class BookingService : IBookingService
         return $"BK-{DateTime.UtcNow:yyyyMMddHHmmss}-{suffix}";
     }
 
-    internal static BookingResponse ToDto(Booking booking)
+    internal static BookingSummaryResponse ToDto(Booking booking)
     {
-        var seatDtos = booking.BookingSeats
+        var seats = booking.BookingSeats
             .Where(x => x.IsActive && x.Seat is not null)
             .Select(x => new BookingSeatDto(
                 x.SeatId,
                 x.Seat!.SeatRow,
                 x.Seat.SeatNumber,
-                x.Seat.SeatType,
+                x.Seat.SeatType ?? SeatTypes.Regular,
                 x.PriceAtBooking))
             .ToList();
 
@@ -261,23 +464,41 @@ public sealed class BookingService : IBookingService
             parking = new ParkingSlotDto(
                 slot.SlotId,
                 slot.EventId,
-                slot.Zone,
+                slot.Zone ?? string.Empty,
                 slot.SlotNumber,
+                slot.ParkingType ?? ParkingTypes.Normal,
                 reservation.FeeAtReservation,
-                slot.Status);
+                slot.Status,
+                slot.IsDisabled);
         }
 
-        return new BookingResponse(
+        var holdSeconds = booking.HoldExpiresAt.HasValue
+            ? Math.Max(0, (int)Math.Ceiling((booking.HoldExpiresAt.Value - DateTime.UtcNow).TotalSeconds))
+            : 0;
+
+        return new BookingSummaryResponse(
             booking.BookingId,
             booking.BookingNumber,
             booking.CustomerId,
             booking.EventId,
             booking.Event?.Name ?? string.Empty,
+            booking.Event?.EventDate ?? default,
+            booking.Event?.StartTime ?? default,
+            booking.Event?.Venue?.Name ?? string.Empty,
             booking.Status,
             booking.HoldExpiresAt,
-            booking.TotalAmount,
-            seatDtos,
+            holdSeconds,
+            seats,
             parking,
+            booking.TicketSubtotal,
+            booking.ParkingFee,
+            booking.PromoCode,
+            booking.DiscountAmount,
+            booking.TotalAmount,
+            booking.Payment?.Status ?? PaymentStatuses.Pending,
+            booking.Payment?.PaymentMethod,
+            booking.Refund?.Status,
+            booking.Refund?.Amount ?? 0m,
             booking.CreatedAt);
     }
 }

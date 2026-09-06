@@ -28,15 +28,15 @@ public sealed class BookingExpiryService : BackgroundService
             try
             {
                 using var scope = _scopeFactory.CreateScope();
-                var bookingService = scope.ServiceProvider.GetRequiredService<IBookingService>();
-                var expired = await bookingService.ExpirePendingHoldsAsync();
+                var service = scope.ServiceProvider.GetRequiredService<IBookingService>();
+                var count = await service.ExpirePendingHoldsAsync();
 
-                if (expired > 0)
-                    _logger.LogInformation("Expired {Count} booking hold(s).", expired);
+                if (count > 0)
+                    _logger.LogInformation("Expired {Count} booking hold(s).", count);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Booking expiry background job failed.");
+                _logger.LogError(ex, "Booking expiry background service failed.");
             }
 
             try
