@@ -1,5 +1,1 @@
-html, body {
-  margin: 0;
-  min-height: 100%;
-  font-family: Arial, Helvetica, sans-serif;
-}
+:root{--navy:#0b1748;--purple:#7c3aed;--blue:#2f80ed;--bg:#f7f8fc;--surface:#fff;--text:#111827;--muted:#667085;--border:#e7e9f2;--danger:#dc2626;--success:#16a34a;--gradient:linear-gradient(120deg,#15145e,#7736e8 55%,#2f8cf7);font-family:Inter,Segoe UI,Arial,sans-serif}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}a{text-decoration:none;color:inherit}.page{width:min(1180px,calc(100% - 28px));margin:auto}.card{background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:0 12px 34px rgba(18,32,68,.10)}.btn{border:0;border-radius:11px;padding:11px 17px;font-weight:700;cursor:pointer}.primary{background:var(--navy);color:#fff}.gradient{background:var(--gradient);color:#fff}.input{width:100%;min-height:43px;border:1px solid var(--border);border-radius:10px;padding:0 12px}
