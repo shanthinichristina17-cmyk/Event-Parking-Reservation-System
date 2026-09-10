@@ -10,73 +10,99 @@ import { CustomerApiService } from '../customer-api.service';
     <main class="page wrap">
       <div class="hero-head">
         <span>EVENT DISCOVERY</span>
-        <h1>Find something worth showing up for.</h1>
-        <p>Search live events and continue directly into the seat-and-parking booking flow.</p>
+        <h1>Find your next EventPark experience.</h1>
+        <p>Search the live backend, filter by category and move directly into seat and parking selection.</p>
       </div>
 
       <section class="search-card">
-        <div class="searchbox"><span>⌕</span><input [(ngModel)]="search" (keyup.enter)="load()" placeholder="Search event name, venue or category"></div>
+        <div class="searchbox"><span>⌕</span><input [(ngModel)]="search" (keyup.enter)="load()" placeholder="Search event, venue or category"></div>
         <button (click)="load()">Search events</button>
       </section>
 
-      <div class="result-head"><b>{{items().length}} event(s)</b><span>Connected to live backend inventory</span></div>
+      <div class="category-filter">
+        @for(c of categories;track c){
+          <button [class.active]="category()===c" (click)="category.set(c)">{{c}}</button>
+        }
+      </div>
+
+      <div class="result-head">
+        <div><b>{{filtered().length}} event(s)</b><span>Live inventory from EventPark API</span></div>
+        <small>Available events update when Admin changes inventory.</small>
+      </div>
 
       <section class="grid">
-        @for(e of items();track e.eventId){
+        @for(e of filtered();track e.eventId){
           <article class="item">
             <div class="image">
-              <img [src]="eventImage(e)" [alt]="e.name || 'Event image'" (error)="eventFallback($event,e)">
+              <img [src]="eventImage(e)" [alt]="e.name || 'Event image'">
               <span class="live">● LIVE</span>
+              <span class="type">{{e.categoryName || 'Event'}}</span>
             </div>
             <div class="content">
-              <span class="type">{{e.categoryName || 'Event'}}</span>
               <h3>{{e.name}}</h3>
-              <p>◷ {{e.eventDate}} · {{e.startTime}}</p>
-              <p>⌖ {{e.venueName || 'Venue'}}</p>
-              <div class="bottom"><strong>Rs. {{e.ticketPrice}}</strong><a [routerLink]="['/booking',e.eventId]">Select seats →</a></div>
+              <div class="meta">
+                <span><i>◷</i>{{e.eventDate}} · {{e.startTime}}</span>
+                <span><i>⌖</i>{{e.venueName || 'Venue'}}</span>
+              </div>
+              <div class="capacity">
+                <span>Event capacity</span><b>{{e.capacity || 'Live'}}</b>
+              </div>
+              <div class="bottom">
+                <div><small>Ticket price</small><strong>Rs. {{e.ticketPrice}}</strong></div>
+                <a [routerLink]="['/booking',e.eventId]">Select seats →</a>
+              </div>
             </div>
           </article>
         } @empty {
-          <div class="empty"><b>No matching events found.</b><p>Try another search or create events from the Admin module.</p></div>
+          <div class="empty"><b>No matching events found.</b><p>Try another category or search term.</p><button (click)="reset()">Reset filters</button></div>
         }
       </section>
     </main>
   `,
   styles:[`
-    .wrap{padding:48px 0 20px}.hero-head{max-width:760px}.hero-head>span{font-size:10px;letter-spacing:2px;color:#0b7a69;font-weight:900}.hero-head h1{font-size:clamp(38px,5vw,58px);letter-spacing:-2.4px;line-height:1.02;margin:8px 0;color:#07363a}.hero-head p{color:#6e8083;line-height:1.7}
-    .search-card{display:grid;grid-template-columns:1fr auto;gap:10px;margin:28px 0 18px;padding:10px;background:#fff;border:1px solid #dce7e4;border-radius:16px;box-shadow:0 15px 40px #07363a0b}
-    .searchbox{display:flex;align-items:center;gap:8px;padding:0 8px}.searchbox span{color:#0b7a69;font-size:20px}.searchbox input{width:100%;border:0;outline:0;min-height:44px;font:inherit;color:#07363a}
-    .search-card button{border:0;border-radius:12px;padding:0 18px;background:#07363a;color:#fff;font-weight:900;cursor:pointer}.result-head{display:flex;justify-content:space-between;gap:12px;margin:18px 0;color:#708184;font-size:11px}.result-head b{color:#07363a}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.item{background:#fff;border:1px solid #dce7e4;border-radius:18px;overflow:hidden;box-shadow:0 14px 38px #07363a0d;transition:.25s}.item:hover{transform:translateY(-4px)}
-    .image{height:184px;position:relative;overflow:hidden;background:#edf5f3}.image img{width:100%;height:100%;object-fit:cover;transition:.35s}.item:hover img{transform:scale(1.035)}.live{position:absolute;top:12px;right:12px;background:#07363ad9;color:#fff;padding:6px 9px;border-radius:999px;font-size:9px;font-weight:900}
-    .content{padding:17px}.type{font-size:9px;font-weight:900;color:#0b7a69;background:#e8f6f3;padding:5px 8px;border-radius:999px}.content h3{font-size:19px;margin:12px 0}.content p{color:#718184;font-size:11px;margin:7px 0}
-    .bottom{display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding-top:15px;border-top:1px solid #edf1ef}.bottom strong{font-size:19px;color:#0b7a69}.bottom a{font-size:11px;font-weight:900;color:#07363a}
-    .empty{grid-column:1/-1;padding:40px;text-align:center;background:#fff;border:1px dashed #cbdad6;border-radius:18px}.empty p{color:#728285}
-    @media(max-width:850px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:560px){.grid{grid-template-columns:1fr}.search-card{grid-template-columns:1fr}.search-card button{min-height:44px}.result-head{flex-direction:column}}
+    .wrap{padding:48px 0 24px}.hero-head{max-width:780px}.hero-head>span{font-size:11px;letter-spacing:2px;color:#0e8f79;font-weight:950}.hero-head h1{font-size:clamp(39px,5vw,58px);letter-spacing:-2.3px;line-height:1.02;margin:8px 0;color:#07383a}.hero-head p{color:#657d82;line-height:1.7;font-size:16px}
+    .search-card{display:grid;grid-template-columns:1fr auto;gap:9px;margin:24px 0 12px;padding:9px;background:#ffffffdf;border:1px solid #9fd4ca;border-radius:15px;box-shadow:0 14px 35px #07383a0b}.searchbox{display:flex;align-items:center;gap:8px;padding:0 8px}.searchbox span{color:#0e8f79;font-size:18px}.searchbox input{width:100%;border:0;outline:0;min-height:43px;background:transparent;font:inherit;color:#07383a}.search-card button{border:0;border-radius:11px;padding:0 17px;background:linear-gradient(135deg,#07383a,#0e8f79);color:#fff;font-weight:900;cursor:pointer}
+    .category-filter{display:flex;gap:7px;flex-wrap:wrap;margin:13px 0 20px}.category-filter button{padding:8px 11px;border:1px solid #a6d8cf;background:#ffffffd9;border-radius:99px;color:#456167;font-size:11px;font-weight:900;cursor:pointer}.category-filter button.active{background:#0e8f79;color:#fff;border-color:#0e8f79}
+    .result-head{display:flex;justify-content:space-between;gap:18px;margin-bottom:14px;color:#71858a;font-size:12px}.result-head>div{display:flex;gap:10px;align-items:center}.result-head b{color:#07383a;font-size:14px}.result-head small{font-size:11px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.item{background:#ffffffeb;border:1px solid #9fd4ca;border-radius:18px;overflow:hidden;box-shadow:0 14px 38px #07383a0d;transition:.22s}.item:hover{transform:translateY(-4px);box-shadow:0 20px 42px #07383a16}.image{height:205px;position:relative;overflow:hidden;background:#edf5f3}.image img{width:100%;height:100%;object-fit:cover;transition:.32s}.item:hover img{transform:scale(1.035)}.live,.type{position:absolute;top:12px;padding:6px 9px;border-radius:999px;font-size:8px;font-weight:950}.live{right:12px;background:#07383add;color:#fff}.type{left:12px;background:#ffffffe8;color:#07383a}
+    .content{padding:17px}.content h3{font-size:21px;margin:0 0 12px;color:#17343a}.meta{display:flex;flex-direction:column;gap:7px;color:#6e8589;font-size:12px}.meta span{display:flex;align-items:center;gap:6px}.meta i{width:22px;height:22px;border-radius:7px;background:#eaf7f4;color:#0e8f79;display:grid;place-items:center;font-style:normal}
+    .capacity{display:flex;justify-content:space-between;padding:10px 11px;background:#f2faf8;border:1px solid #d2ebe5;border-radius:10px;margin-top:12px;font-size:11px;color:#71858a}.capacity b{color:#16444a}
+    .bottom{display:flex;justify-content:space-between;align-items:end;margin-top:14px;padding-top:13px;border-top:1px solid #dceae7}.bottom>div{display:flex;flex-direction:column}.bottom small{font-size:10px;color:#87979a}.bottom strong{font-size:21px;color:#0e8f79}.bottom a{padding:10px 12px;border-radius:9px;background:#07383a;color:#fff;text-decoration:none;font-size:11px;font-weight:950}
+    .empty{grid-column:1/-1;padding:42px;text-align:center;background:#ffffffdc;border:1px dashed #9fcfc6;border-radius:18px}.empty p{color:#71858a}.empty button{border:0;border-radius:9px;background:#0e8f79;color:#fff;padding:9px 13px;font-weight:900;cursor:pointer}
+    @media(max-width:870px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:570px){.grid{grid-template-columns:1fr}.search-card{grid-template-columns:1fr}.search-card button{min-height:43px}.result-head{flex-direction:column}.result-head>div{flex-wrap:wrap}}
   `]
 })
 export class EventsComponent{
   private api=inject(CustomerApiService);
   readonly items=signal<any[]>([]);
+  readonly category=signal('All');
   search='';
-  constructor(){this.load()}
-  load(){this.api.events({search:this.search}).subscribe({next:(r:any)=>this.items.set(r.items??r.data??r??[]),error:()=>this.items.set([])})}
+  readonly categories=['All','Concert','Conference','Seminar','Sports','Webinar','Workshop'];
 
-  eventFallback(ev:Event,e:any){
-    const img=ev.target as HTMLImageElement;
-    const t=`${e?.categoryName??''} ${e?.name??''}`.toLowerCase();
-    let fallback='/customer-assets/event-music.svg';
-    if(t.includes('sport')||t.includes('final')||t.includes('match'))fallback='/customer-assets/event-sports.svg';
-    else if(t.includes('conference')||t.includes('summit')||t.includes('business')||t.includes('tech'))fallback='/customer-assets/event-conference.svg';
-    else if(t.includes('workshop')||t.includes('studio')||t.includes('training'))fallback='/customer-assets/event-workshop.svg';
-    if(!img.src.endsWith(fallback)) img.src=fallback;
+  constructor(){this.load()}
+
+  load(){
+    this.api.events({search:this.search,page:1,pageSize:100}).subscribe({
+      next:(r:any)=>this.items.set(r?.items??r?.data??r??[]),
+      error:()=>this.items.set([])
+    })
   }
+
+  filtered(){
+    const c=this.category().toLowerCase();
+    if(c==='all')return this.items();
+    return this.items().filter(e=>String(e?.categoryName||'').toLowerCase()===c);
+  }
+
+  reset(){this.search='';this.category.set('All');this.load()}
+
   eventImage(e:any){
-    if(e?.imageUrl)return e.imageUrl;if(e?.bannerUrl)return e.bannerUrl;
     const t=`${e?.categoryName??''} ${e?.name??''}`.toLowerCase();
-    if(t.includes('sport')||t.includes('final')||t.includes('match'))return '/customer-assets/event-sports.jpg';
-    if(t.includes('conference')||t.includes('summit')||t.includes('business')||t.includes('tech'))return '/customer-assets/event-conference.jpg';
-    if(t.includes('workshop')||t.includes('studio')||t.includes('training'))return '/customer-assets/event-workshop.jpg';
-    return '/customer-assets/event-music.jpg';
+    if(t.includes('conference')||t.includes('summit'))return '/customer-assets/categories/conference.jpg';
+    if(t.includes('seminar'))return '/customer-assets/categories/seminar.jpg';
+    if(t.includes('sport')||t.includes('match')||t.includes('final'))return '/customer-assets/categories/sports.jpg';
+    if(t.includes('webinar')||t.includes('online'))return '/customer-assets/categories/webinar.jpg';
+    if(t.includes('workshop')||t.includes('training')||t.includes('bootcamp'))return '/customer-assets/categories/workshop.jpg';
+    return '/customer-assets/categories/concert.jpg';
   }
 }
