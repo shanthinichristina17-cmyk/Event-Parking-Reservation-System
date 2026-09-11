@@ -1,7 +1,13 @@
-import { Routes } from '@angular/router';import { customerGuard } from '../../core/guards/customer.guard';
+import { Routes } from '@angular/router';
+import { customerGuard } from '../../core/guards/customer.guard';
+
 export const CUSTOMER_ROUTES:Routes=[
- {path:'login',loadComponent:()=>import('./pages/login.component').then(m=>m.LoginComponent)},
+ {path:'login',loadComponent:()=>import('./pages/login.component').then(m=>m.LoginComponent),data:{loginRole:'choose'}},
+ {path:'login/customer',loadComponent:()=>import('./pages/login.component').then(m=>m.LoginComponent),data:{loginRole:'customer'}},
+ {path:'login/admin',loadComponent:()=>import('./pages/login.component').then(m=>m.LoginComponent),data:{loginRole:'admin'}},
  {path:'register',loadComponent:()=>import('./pages/register.component').then(m=>m.RegisterComponent)},
+ {path:'forgot-password',loadComponent:()=>import('./pages/forgot-password.component').then(m=>m.ForgotPasswordComponent)},
+ {path:'reset-password',loadComponent:()=>import('./pages/reset-password.component').then(m=>m.ResetPasswordComponent)},
  {path:'',loadComponent:()=>import('./layout/customer-shell.component').then(m=>m.CustomerShellComponent),children:[
   {path:'',loadComponent:()=>import('./pages/home.component').then(m=>m.HomeComponent)},
   {path:'events',loadComponent:()=>import('./pages/events.component').then(m=>m.EventsComponent)},

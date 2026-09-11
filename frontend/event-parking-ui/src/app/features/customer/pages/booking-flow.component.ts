@@ -98,11 +98,28 @@ import { CustomerApiService } from '../customer-api.service';
         <section class="card ticket">
           <div class="tickethead"><div><small>BOOKING NUMBER</small><b>{{t.bookingNumber}}</b></div><span>CONFIRMED</span></div>
           <div class="ticketbody">
-            <div><h2>{{t.eventName}}</h2><p>◷ {{t.eventDate}} · {{t.startTime}}</p><p>⌖ {{t.venueName}}</p><strong>Total paid: Rs. {{t.finalTotal||t.totalPaid||'-'}}</strong></div>
-            @if(qr()){<img [src]="qr()" alt="Booking QR code">}
+            <div>
+              <h2>{{t.eventName}}</h2>
+              <p>◷ {{t.eventDate}} · {{t.startTime}}</p>
+              <p>⌖ {{t.venueName}}</p>
+              <strong>Total paid: Rs. {{t.finalTotal||t.totalPaid||'-'}}</strong>
+              <div class="ticket-note">Keep this QR on your phone and show it at event entry.</div>
+            </div>
+            <div class="qr-panel">
+              @if(qr()){<img [src]="qr()" alt="Booking QR code">}
+              <span>EVENT ENTRY QR</span>
+            </div>
+          </div>
+          <div class="ticket-actions">
+            <button class="btn download-btn" type="button" [disabled]="!qr()" (click)="downloadQr()">⬇ Download QR</button>
+            <small>PNG format • save it to your phone gallery/files</small>
           </div>
         </section>
-        <button class="btn primary" (click)="router.navigateByUrl('/my-bookings')">View my bookings →</button>
+
+        <div class="confirm-actions">
+          <button class="btn primary" (click)="downloadQr()" [disabled]="!qr()">Download QR to device</button>
+          <button class="btn ghost" (click)="router.navigateByUrl('/my-bookings')">View my bookings →</button>
+        </div>
       </div>
     }
 
@@ -112,7 +129,7 @@ import { CustomerApiService } from '../customer-api.service';
   styles:[`
     .wrap{padding:34px 0}.flow-head{display:flex;justify-content:space-between;align-items:center;gap:18px}.flow-head>div>span,.eyebrow{font-size:8px;letter-spacing:1.5px;font-weight:950;color:#0e8f79}.flow-head h1,.confirm>h1{font-size:34px;margin:5px 0;color:#07383a}.flow-head p,.confirm>p{color:#71858a;margin:0}.hold-badge{padding:10px 12px;border-radius:11px;background:#fff5e4;border:1px solid #efc57b;color:#a96900;font-size:10px;font-weight:950}
     .steps{display:flex;align-items:center;margin:22px 0}.steps>div{display:flex;align-items:center;gap:7px;color:#788b8f;font-size:9px;font-weight:900}.steps b{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#e8f0ee;color:#688086}.steps>i{height:2px;flex:1;background:#cfe3df;margin:0 8px}.steps>div.on b,.steps>div.done b{background:#0e8f79;color:#fff}.steps>div.on{color:#0e8f79}.steps>div.done{color:#53736f}
-    .booking-panel,.box,.ticket{background:#ffffffeb;border:1px solid #9fd4ca;border-radius:18px;box-shadow:0 16px 38px #07383a0b}.booking-panel{padding:19px}.panel-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.panel-top>div>span{font-size:7px;letter-spacing:1.3px;color:#0e8f79;font-weight:950}.panel-top h2,.box h2{font-size:19px;margin:3px 0;color:#17383d}.panel-top p,.box>p{font-size:9px;color:#71858a;margin:0}.legend{display:flex;gap:8px;flex-wrap:wrap}.legend span{display:flex;align-items:center;gap:4px;font-size:7px;color:#62797e}.legend i{width:9px;height:9px;border-radius:3px}.available-dot{background:#dff6e7;border:1px solid #8fd3a6}.held-dot{background:#fff1c8;border:1px solid #e9c45e}.booked-dot{background:#ffe0e0;border:1px solid #e79b9b}.selected-dot{background:#0e8f79}
+    .booking-panel,.box,.ticket{background:#ffffffeb;border:1px solid #9fd4ca;border-radius:18px;box-shadow:0 16px 38px #07383a0b}.booking-panel{padding:19px}.panel-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.panel-top>div>span{font-size:7px;letter-spacing:1.3px;color:#0e8f79;font-weight:950}.panel-top h2,.box h2{font-size:19px;margin:3px 0;color:#17383d}.panel-top p,.box>p{font-size:9px;color:#71858a;margin:0}.legend{display:flex;gap:8px;flex-wrap:wrap}.legend span{display:flex;align-items:center;gap:4px;font-size:7px;color:#62797e}.legend i{width:9px;height:9px;border-radius:3px}.available-dot{background:#dff6e7;border:1px solid #8fd3a6}.held-dot{background:#fff5d8;border:1px solid #e9c96e}.booked-dot{background:#ffe9e9;border:1px solid #eba9a9}.selected-dot{background:#0e8f79}
     .stage{width:min(520px,70%);margin:22px auto 18px;padding:9px;text-align:center;border-radius:0 0 16px 16px;background:linear-gradient(90deg,#d9e7e4,#eef4f2,#d9e7e4);color:#718489;font-size:8px;font-weight:950;letter-spacing:1.2px}
     .seatmap{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:7px}.seatmap button{min-height:50px;border-radius:9px;border:1px solid #d8e5e2;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}.seatmap button b{font-size:9px}.seatmap button small{font-size:7px;opacity:.75}.seatmap button.available{background:#e8f8ed;border-color:#a5dcb6;color:#146b38}.seatmap button.held{background:#fff5d8;border-color:#e9c96e;color:#8a5b00}.seatmap button.booked{background:#ffe9e9;border-color:#eba9a9;color:#b42318}.seatmap button.sel{background:#0e8f79!important;border-color:#0e8f79!important;color:#fff!important}.seatmap button:disabled{cursor:not-allowed}
     .selection-bar{margin-top:17px;padding-top:14px;border-top:1px solid #dceae7;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:9px;color:#6e8589}.selection-bar>span b{font-size:14px;color:#0e8f79}.selection-bar>div{display:flex;gap:7px}
@@ -120,8 +137,9 @@ import { CustomerApiService } from '../customer-api.service';
     .slots{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:16px}.slots button{min-height:105px;border:1px solid #b8ddd6;border-radius:12px;background:#f9fcfb;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer}.slots button.sel{background:#0e8f79;color:#fff;border-color:#0e8f79}.slots button:disabled{opacity:.4;cursor:not-allowed}.parking-icon{width:27px;height:27px;border-radius:8px;background:#e9f7f4;color:#0e8f79;display:grid;place-items:center;font-weight:950}.slots button.sel .parking-icon{background:#ffffff20;color:#fff}.slots b{font-size:9px}.slots small{font-size:7px}.slots strong{font-size:9px;margin-top:3px}
     .offer-card{display:grid;grid-template-columns:86px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #9fd4ca;border-radius:14px;background:linear-gradient(135deg,#f2fbf8,#ffffff);box-shadow:0 10px 24px #07383a0a}.offer-card img{width:86px;height:68px;object-fit:cover;border-radius:10px;border:1px solid #cce8e2}.offer-copy{display:flex;flex-direction:column;gap:2px}.offer-copy>span{font-size:7px;letter-spacing:1.2px;color:#0e8f79;font-weight:950}.offer-copy>b{font-size:13px;color:#07383a}.offer-copy small{font-size:8px;color:#5f777c}.offer-copy small strong{color:#0e8f79}.offer-copy p{font-size:7px;color:#71858a;margin:2px 0 0}.offer-btn{min-height:38px;border:0;border-radius:10px;padding:0 12px;background:linear-gradient(135deg,#0b7a69,#16a085);color:#fff;font-size:8px;font-weight:950;cursor:pointer;white-space:nowrap}.offer-btn:hover{filter:brightness(1.04)}
     .checkout{display:grid;grid-template-columns:1.05fr .95fr;gap:15px}.box{padding:20px;display:flex;flex-direction:column;gap:11px}.line{display:flex;justify-content:space-between;border-bottom:1px dashed #c8ddd8;padding:8px 0;font-size:10px}.promo{display:grid;grid-template-columns:1fr auto;gap:7px}.input{min-height:42px;border:1px solid #b7ddd5;border-radius:9px;padding:0 11px;outline:0}.input:focus{border-color:#0e8f79;box-shadow:0 0 0 3px #0e8f7915}.total{font-size:17px}.total b{color:#0e8f79}.security-note,.simulator-note{padding:10px;border-radius:10px;font-size:8px;line-height:1.5}.security-note{background:#eaf8f0;color:#236f43;border:1px solid #c5e7d0}.simulator-note{background:#fff8e8;color:#805912;border:1px solid #efd49b}.payment-box label{display:flex;flex-direction:column;gap:5px;font-size:8px;font-weight:900;color:#49646a}.two{display:grid;grid-template-columns:1fr 1fr;gap:7px}.pay-btn{background:linear-gradient(135deg,#07383a,#0e8f79,#62a749);color:#fff;border:0}
-    .confirm{text-align:center;padding-top:15px}.ok{width:60px;height:60px;border-radius:50%;background:#dcfce7;color:#16a34a;display:grid;place-items:center;margin:0 auto 10px;font-size:28px}.ticket{max-width:650px;margin:18px auto;text-align:left;overflow:hidden}.tickethead{padding:14px 17px;background:linear-gradient(135deg,#07383a,#0e8f79);color:#fff;display:flex;justify-content:space-between;align-items:center}.tickethead>div{display:flex;flex-direction:column}.tickethead small{font-size:7px;color:#bcdad4}.tickethead b{font-size:12px}.tickethead>span{padding:6px 8px;border-radius:99px;background:#ffffff18;font-size:7px;font-weight:950}.ticketbody{padding:18px;display:grid;grid-template-columns:1fr 170px;gap:14px}.ticketbody h2{margin-top:0}.ticketbody p{font-size:9px;color:#70858a}.ticketbody strong{color:#0e8f79}.ticketbody img{width:170px;height:170px;object-fit:contain}.err{margin-top:13px;padding:11px 13px;border:1px solid #efb2b2;background:#fff0f0;color:#b42318;border-radius:10px;font-size:9px}
-    @media(max-width:800px){.slots{grid-template-columns:repeat(3,1fr)}.checkout{grid-template-columns:1fr}.offer-card{grid-template-columns:70px 1fr}.offer-card img{width:70px;height:58px}.offer-btn{grid-column:1/-1;width:100%}.flow-head{align-items:flex-start;flex-direction:column}}@media(max-width:560px){.slots{grid-template-columns:1fr 1fr}.ticketbody{grid-template-columns:1fr}.ticketbody img{margin:auto}.selection-bar{align-items:flex-start;flex-direction:column}.steps span{display:none}}
+    .confirm{text-align:center;padding-top:15px}.ok{width:60px;height:60px;border-radius:50%;background:#dcfce7;color:#16a34a;display:grid;place-items:center;margin:0 auto 10px;font-size:28px}.ticket{max-width:700px;margin:18px auto;text-align:left;overflow:hidden}.tickethead{padding:14px 17px;background:linear-gradient(135deg,#07383a,#0e8f79);color:#fff;display:flex;justify-content:space-between;align-items:center}.tickethead>div{display:flex;flex-direction:column}.tickethead small{font-size:7px;color:#bcdad4}.tickethead b{font-size:12px}.tickethead>span{padding:6px 8px;border-radius:99px;background:#ffffff18;font-size:7px;font-weight:950}.ticketbody{padding:18px;display:grid;grid-template-columns:1fr 190px;gap:16px}.ticketbody h2{margin-top:0}.ticketbody p{font-size:9px;color:#70858a}.ticketbody strong{color:#0e8f79}.ticket-note{margin-top:12px;padding:9px;border-radius:9px;background:#eff8f6;color:#567278;font-size:8px}.qr-panel{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px;border-radius:12px;background:#f8fcfb;border:1px solid #d1e8e3}.qr-panel img{width:170px;height:170px;object-fit:contain}.qr-panel span{font-size:7px;letter-spacing:1px;color:#567278;font-weight:950}.ticket-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid #dceae7;background:#fbfefd}.ticket-actions small{font-size:7px;color:#7e9195}.download-btn{background:#0b66dc;color:#fff;border:0}.confirm-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.err{margin-top:13px;padding:11px 13px;border:1px solid #efb2b2;background:#fff0f0;color:#b42318;border-radius:10px;font-size:9px}
+    @media(max-width:800px){.slots{grid-template-columns:repeat(3,1fr)}.checkout{grid-template-columns:1fr}.offer-card{grid-template-columns:70px 1fr}.offer-card img{width:70px;height:58px}.offer-btn{grid-column:1/-1;width:100%}.flow-head{align-items:flex-start;flex-direction:column}}
+    @media(max-width:560px){.slots{grid-template-columns:1fr 1fr}.ticketbody{grid-template-columns:1fr}.qr-panel{width:max-content;margin:auto}.selection-bar{align-items:flex-start;flex-direction:column}.steps span{display:none}.ticket-actions{align-items:flex-start;flex-direction:column}}
   `]
 })
 export class BookingFlowComponent implements OnDestroy{
@@ -155,7 +173,6 @@ export class BookingFlowComponent implements OnDestroy{
   }
 
   title(){return ['Choose your seats','Add optional parking','Protected checkout','Booking confirmed'][this.step()-1]}
-
   toggle(id:number){const s=new Set(this.chosen());s.has(id)?s.delete(id):s.add(id);this.chosen.set(s)}
 
   hold(){
@@ -178,10 +195,7 @@ export class BookingFlowComponent implements OnDestroy{
     })
   }
 
-  useEvent10(){
-    this.promo='EVENT10';
-    this.applyPromo();
-  }
+  useEvent10(){this.promo='EVENT10';this.applyPromo()}
 
   applyPromo(){
     if(!this.promo.trim())return;
@@ -200,6 +214,18 @@ export class BookingFlowComponent implements OnDestroy{
       },
       error:e=>this.error.set(e?.error?.message??'Payment failed')
     })
+  }
+
+  downloadQr(){
+    const url=this.qr();
+    if(!url){this.error.set('QR ticket is still loading. Please try again.');return}
+    const booking=this.ticket()?.bookingNumber || `booking-${this.bookingId()}`;
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`EventPark-${booking}-QR.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   minutes(){return Math.floor(this.remaining()/60).toString().padStart(2,'0')}
