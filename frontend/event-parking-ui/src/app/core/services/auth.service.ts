@@ -10,7 +10,6 @@ export class AuthService{
   private state=signal<any>(this.read());
 
   readonly user=this.state.asReadonly();
-  // IMPORTANT: depend on the reactive state so the navbar updates immediately after login/logout.
   readonly isLoggedIn=computed(()=>!!this.state() && !!localStorage.getItem('eventpark_token'));
   readonly isAdmin=computed(()=>this.state()?.role==='Admin');
   readonly isCustomer=computed(()=>this.state()?.role==='Customer');
@@ -24,13 +23,19 @@ export class AuthService{
   }
 
   register(body:any){return this.api.post('/auth/register',body)}
+  forgotPassword(email:string){return this.api.post<any>('/auth/forgot-password',{email})}
+  resetPassword(token:string,newPassword:string){return this.api.post<any>('/auth/reset-password',{token,newPassword})}
   token(){return localStorage.getItem('eventpark_token')}
 
-  logout(){
+  clearSession(){
     localStorage.removeItem('eventpark_token');
     localStorage.removeItem('eventpark_user');
     this.state.set(null);
-    this.router.navigateByUrl('/login');
+  }
+
+  logout(){
+    this.clearSession();
+    this.router.navigateByUrl('/login/customer');
   }
 
   goAfterLogin(){this.router.navigateByUrl(this.isAdmin()?'/admin/dashboard':'/dashboard')}
