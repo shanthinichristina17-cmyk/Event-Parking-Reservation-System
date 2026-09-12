@@ -62,6 +62,9 @@ public sealed class AdminService : IAdminService
             ? NotificationTypes.Update
             : request.Type.Trim();
 
+        if (type.Length > 30)
+            throw ApiException.BadRequest("Notification type cannot exceed 30 characters.");
+
         if (string.IsNullOrWhiteSpace(request.Message))
             throw ApiException.BadRequest("Notification message is required.");
 

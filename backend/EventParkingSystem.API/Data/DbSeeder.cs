@@ -18,7 +18,14 @@ public static class DbSeeder
 
         var email = (configuration["Seed:AdminEmail"] ?? "admin@eventpark.local").Trim().ToLowerInvariant();
         var name = configuration["Seed:AdminName"] ?? "System Admin";
-        var password = configuration["Seed:AdminPassword"] ?? "Admin@123";
+        var password = configuration["Seed:AdminPassword"];
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            logger.LogWarning(
+                "Development seed skipped because Seed:AdminPassword is not configured. Use .NET User Secrets or an environment variable.");
+            return;
+        }
 
         // Development-only upsert. This deliberately repairs stale/invalid demo-admin data
         // left behind by an older schema or package so Swagger login is predictable.

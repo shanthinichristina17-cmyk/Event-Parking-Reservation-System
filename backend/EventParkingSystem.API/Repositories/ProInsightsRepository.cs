@@ -24,6 +24,7 @@ public sealed class ProInsightsRepository : IProInsightsRepository
 
     public Task<List<Event>> GetEventsDetailedAsync() =>
         _db.Events.AsNoTracking()
+            .AsSplitQuery()
             .Include(x => x.Venue)
             .Include(x => x.Category)
             .Include(x => x.Seats)
@@ -36,6 +37,7 @@ public sealed class ProInsightsRepository : IProInsightsRepository
 
     public Task<Event?> GetEventDetailedAsync(int eventId) =>
         _db.Events.AsNoTracking()
+            .AsSplitQuery()
             .Include(x => x.Venue)
             .Include(x => x.Category)
             .Include(x => x.Seats)

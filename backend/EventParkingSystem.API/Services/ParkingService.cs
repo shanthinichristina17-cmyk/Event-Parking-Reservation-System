@@ -94,6 +94,12 @@ public sealed class ParkingService : IParkingService
         if (request.Fee < 0)
             throw ApiException.BadRequest("Parking fee cannot be negative.");
 
+        if (string.IsNullOrWhiteSpace(request.Zone))
+            throw ApiException.BadRequest("Zone is required.");
+
+        if (string.IsNullOrWhiteSpace(request.SlotNumber))
+            throw ApiException.BadRequest("SlotNumber is required.");
+
         var slot = new ParkingSlot
         {
             EventId = eventId,
@@ -134,6 +140,9 @@ public sealed class ParkingService : IParkingService
 
         if (request.Fee < 0)
             throw ApiException.BadRequest("Parking fee cannot be negative.");
+
+        if (string.IsNullOrWhiteSpace(request.Zone))
+            throw ApiException.BadRequest("Zone is required.");
 
         slot.Zone = request.Zone.Trim().ToUpperInvariant();
         slot.ParkingType = NormalizeParkingType(request.ParkingType);

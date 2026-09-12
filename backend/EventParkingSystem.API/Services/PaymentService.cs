@@ -64,6 +64,9 @@ public sealed class PaymentService : IPaymentService
                 ? "Card"
                 : request.PaymentMethod.Trim();
 
+            if (method.Length > 50)
+                throw ApiException.BadRequest("PaymentMethod cannot exceed 50 characters.");
+
             ValidateSimulationFields(method, request);
 
             var maskedMethod = method;

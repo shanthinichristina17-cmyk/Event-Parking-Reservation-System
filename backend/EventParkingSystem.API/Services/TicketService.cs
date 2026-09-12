@@ -33,7 +33,7 @@ public sealed class TicketService : ITicketService
             booking.Event?.Venue?.Name ?? string.Empty,
             booking.BookingSeats
                 .Where(x => x.IsActive && x.Seat is not null)
-                .Select(x => $"{x.Seat!.SeatRow}{int.Parse(x.Seat.SeatNumber)}")
+                .Select(x => FormatSeatLabel(x.Seat!.SeatRow, x.Seat.SeatNumber))
                 .ToList(),
             booking.ParkingReservation is { IsActive: true, Slot: not null }
                 ? booking.ParkingReservation.Slot!.SlotNumber
@@ -87,4 +87,9 @@ public sealed class TicketService : ITicketService
 
         return booking;
     }
+
+    private static string FormatSeatLabel(string seatRow, string seatNumber) =>
+        int.TryParse(seatNumber, out var numericSeatNumber)
+            ? $"{seatRow}{numericSeatNumber}"
+            : $"{seatRow}{seatNumber}";
 }

@@ -4,6 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>EventParkingSystem.API</RootNamespace>
+    <UserSecretsId>EventParkingSystem.API-Development</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

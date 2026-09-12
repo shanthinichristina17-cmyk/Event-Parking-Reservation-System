@@ -7,17 +7,10 @@ GO
 USE EventParkingReservationDb;
 GO
 
-IF OBJECT_ID(N'dbo.Notifications', N'U') IS NOT NULL DROP TABLE dbo.Notifications;
-IF OBJECT_ID(N'dbo.Payments', N'U') IS NOT NULL DROP TABLE dbo.Payments;
-IF OBJECT_ID(N'dbo.ParkingReservations', N'U') IS NOT NULL DROP TABLE dbo.ParkingReservations;
-IF OBJECT_ID(N'dbo.BookingSeats', N'U') IS NOT NULL DROP TABLE dbo.BookingSeats;
-IF OBJECT_ID(N'dbo.Bookings', N'U') IS NOT NULL DROP TABLE dbo.Bookings;
-IF OBJECT_ID(N'dbo.ParkingSlots', N'U') IS NOT NULL DROP TABLE dbo.ParkingSlots;
-IF OBJECT_ID(N'dbo.Seats', N'U') IS NOT NULL DROP TABLE dbo.Seats;
-IF OBJECT_ID(N'dbo.Events', N'U') IS NOT NULL DROP TABLE dbo.Events;
-IF OBJECT_ID(N'dbo.EventCategories', N'U') IS NOT NULL DROP TABLE dbo.EventCategories;
-IF OBJECT_ID(N'dbo.Venues', N'U') IS NOT NULL DROP TABLE dbo.Venues;
-IF OBJECT_ID(N'dbo.Customers', N'U') IS NOT NULL DROP TABLE dbo.Customers;
+-- First-install script only. It deliberately does not drop existing tables.
+-- Existing databases are upgraded non-destructively by DatabaseBootstrapper.
+IF OBJECT_ID(N'dbo.Customers', N'U') IS NOT NULL
+    THROW 51000, 'EventParkingReservationDb already has a schema. Start the API to apply non-destructive upgrades.', 1;
 GO
 
 CREATE TABLE dbo.Customers
@@ -113,12 +106,14 @@ CREATE TABLE dbo.ParkingSlots
     EventId INT NOT NULL,
     Zone NVARCHAR(30) NULL,
     SlotNumber NVARCHAR(30) NOT NULL,
+    ParkingType NVARCHAR(50) NULL,
     Fee DECIMAL(10,2) NOT NULL,
     Status NVARCHAR(20) NOT NULL CONSTRAINT DF_ParkingSlots_Status DEFAULT N'Available',
+    IsDisabled BIT NOT NULL CONSTRAINT DF_ParkingSlots_IsDisabled DEFAULT 0,
     CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_ParkingSlots_CreatedAt DEFAULT SYSUTCDATETIME(),
     RowVersion ROWVERSION NOT NULL,
     CONSTRAINT FK_ParkingSlots_Events FOREIGN KEY (EventId) REFERENCES dbo.Events(EventId) ON DELETE CASCADE,
-    CONSTRAINT CK_ParkingSlots_Status CHECK (Status IN (N'Available', N'Held', N'Reserved')),
+    CONSTRAINT CK_ParkingSlots_Status CHECK (Status IN (N'Available', N'Held', N'Booked', N'Disabled')),
     CONSTRAINT CK_ParkingSlots_Fee CHECK (Fee >= 0)
 );
 CREATE UNIQUE INDEX UX_ParkingSlots_Event_Slot ON dbo.ParkingSlots(EventId, SlotNumber);
@@ -133,6 +128,10 @@ CREATE TABLE dbo.Bookings
     EventId INT NOT NULL,
     Status NVARCHAR(20) NOT NULL CONSTRAINT DF_Bookings_Status DEFAULT N'Pending',
     HoldExpiresAt DATETIME2 NULL,
+    TicketSubtotal DECIMAL(10,2) NOT NULL CONSTRAINT DF_Bookings_TicketSubtotal DEFAULT 0,
+    ParkingFee DECIMAL(10,2) NOT NULL CONSTRAINT DF_Bookings_ParkingFee DEFAULT 0,
+    PromoCode NVARCHAR(50) NULL,
+    DiscountAmount DECIMAL(10,2) NOT NULL CONSTRAINT DF_Bookings_DiscountAmount DEFAULT 0,
     TotalAmount DECIMAL(10,2) NOT NULL,
     CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_Bookings_CreatedAt DEFAULT SYSUTCDATETIME(),
     UpdatedAt DATETIME2 NOT NULL CONSTRAINT DF_Bookings_UpdatedAt DEFAULT SYSUTCDATETIME(),
@@ -183,15 +182,34 @@ CREATE TABLE dbo.Payments
     PaymentId INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Payments PRIMARY KEY,
     BookingId INT NOT NULL,
     Amount DECIMAL(10,2) NOT NULL,
+    PaymentMethod NVARCHAR(50) NOT NULL CONSTRAINT DF_Payments_PaymentMethod DEFAULT N'Card',
     Status NVARCHAR(20) NOT NULL,
     PaidAt DATETIME2 NOT NULL,
-    ReceiptNumber NVARCHAR(50) NOT NULL,
+    ReceiptNumber NVARCHAR(60) NOT NULL,
+    FailureReason NVARCHAR(300) NULL,
     CONSTRAINT FK_Payments_Bookings FOREIGN KEY (BookingId) REFERENCES dbo.Bookings(BookingId) ON DELETE CASCADE,
     CONSTRAINT CK_Payments_Amount CHECK (Amount >= 0),
-    CONSTRAINT CK_Payments_Status CHECK (Status IN (N'Completed'))
+    CONSTRAINT CK_Payments_Status CHECK (Status IN (N'Pending', N'Completed', N'Failed'))
 );
 CREATE UNIQUE INDEX UX_Payments_Booking ON dbo.Payments(BookingId);
 CREATE UNIQUE INDEX UX_Payments_Receipt ON dbo.Payments(ReceiptNumber);
+GO
+
+CREATE TABLE dbo.Refunds
+(
+    RefundId INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Refunds PRIMARY KEY,
+    BookingId INT NOT NULL,
+    PaymentId INT NULL,
+    Amount DECIMAL(10,2) NOT NULL,
+    Status NVARCHAR(30) NOT NULL,
+    Reason NVARCHAR(300) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_Refunds_CreatedAt DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_Refunds_Bookings FOREIGN KEY (BookingId) REFERENCES dbo.Bookings(BookingId) ON DELETE CASCADE,
+    CONSTRAINT FK_Refunds_Payments FOREIGN KEY (PaymentId) REFERENCES dbo.Payments(PaymentId),
+    CONSTRAINT CK_Refunds_Amount CHECK (Amount >= 0)
+);
+CREATE UNIQUE INDEX UX_Refunds_Booking ON dbo.Refunds(BookingId);
+CREATE INDEX IX_Refunds_PaymentId ON dbo.Refunds(PaymentId);
 GO
 
 CREATE TABLE dbo.Notifications
