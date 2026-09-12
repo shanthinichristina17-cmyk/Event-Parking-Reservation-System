@@ -1,9 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>EventParkingSystem.API</RootNamespace>
+    <UserSecretsId>5b8776dd-c0ca-4838-a44e-71b11fac83b4</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
